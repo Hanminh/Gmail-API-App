@@ -372,8 +372,8 @@
           '',
           `--${boundary}--`
         ].join('\r\n');
-
-        const encodedEmail = btoa(email).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        
+        const encodedEmail = btoa(unescape(encodeURIComponent(email))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
         try {
           await gapi.client.gmail.users.messages.send({
