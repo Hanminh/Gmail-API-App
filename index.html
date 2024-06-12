@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+  <link rel="stylesheet" href="./assets/reset.css">
+  <link rel="stylesheet" href="./assets/style.css">
+  <title>Gmail API Quickstart</title>
+  <meta charset="utf-8" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #f4f4f9;
+    }
+
+    h2 {
+      color: #333;
+    }
+
+    button {
+      background-color: #4285f4;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      border-radius: 4px;
+      margin: 5px;
+    }
+
+    button:hover {
+      background-color: #357ae8;
+    }
+
+    #content {
+      margin-top: 20px;
+      background-color: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .email-item {
+      padding: 10px;
+      border-bottom: 1px solid #ddd;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .email-item:hover {
+      background-color: #f1f1f1;
+    }
+
+    #send_email_form {
+      background-color: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      margin-top: 20px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+
+    input[type="email"],
+    input[type="text"],
+    textarea {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 10px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      font-size: 14px;
+    }
+
+    input[type="submit"] {
+      background-color: #28a745;
+    }
+
+    input[type="submit"]:hover {
+      background-color: #218838;
+    }
+
+    pre {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+  </style>
+</head>
+
+<body>
+  <p>Gmail API Quickstart</p>
+
+  <button id="authorize_button" onclick="handleAuthClick()">Authorize</button>
+  <button id="signout_button" onclick="handleSignoutClick()">Sign Out</button>
+
+  <pre id="content" style="white-space: pre-wrap;"></pre>
+
+
+  <script type="text/javascript">
+
+    const CLIENT_ID = '536908267385-ahh67jfetb6hsd0b9o0i2ois3u5m71f8.apps.googleusercontent.com';
+    const API_KEY = 'AIzaSyD6tj5uCJbsV2AR13huXI8q-ujNHEFjiWk';
+
+
+    const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/gmail/v1/rest';
+
+
+    const SCOPES = 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send';
+
+    let tokenClient;
+    let gapiInited = false;
+    let gisInited = false;
+
+    document.getElementById('authorize_button').style.visibility = 'hidden';
+    document.getElementById('signout_button').style.visibility = 'hidden';
+
+
+    function gapiLoaded() {
+      gapi.load('client', initializeGapiClient);
+    }
+
+
+    async function initializeGapiClient() {
+      await gapi.client.init({
+        apiKey: API_KEY,
+        discoveryDocs: [DISCOVERY_DOC],
+      });
+      gapiInited = true;
+      maybeEnableButtons();
+    }
+
+
+    function gisLoaded() {
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: SCOPES,
+        callback: '',
+      });
+      gisInited = true;
+      maybeEnableButtons();
+    }
+
+
+    function maybeEnableButtons() {
+      if (gapiInited && gisInited) {
+        document.getElementById('authorize_button').style.visibility = 'visible';
+      }
+    }
+
+    function handleAuthClick() {
+      tokenClient.callback = async (resp) => {
+        if (resp.error !== undefined) {
+          throw (resp);
+        }
+        document.getElementById('signout_button').style.visibility = 'visible';
+        document.getElementById('authorize_button').innerText = 'Refresh';
+        document.getElementById('send_email_form').style.display = 'block';
+
+        const response = await gapi.client.gmail.users.getProfile({ userId: 'me' });
+        userEmail = response.result.emailAddress;
+
+        document.getElementById('from').value = userEmail;
+
+        await listMail();
+      };
+
+      if (gapi.client.getToken() === null) {
+
+        tokenClient.requestAccessToken({ prompt: 'consent' });
+      } else {
+        
+        tokenClient.requestAccessToken({ prompt: '' });
+      }
+    }
+
+    function handleSignoutClick() {
+      const token = gapi.client.getToken();
+      if (token !== null) {
+        google.accounts.oauth2.revoke(token.access_token);
+        gapi.client.setToken('');
+        document.getElementById('content').innerText = '';
+        document.getElementById('authorize_button').innerText = 'Authorize';
+        document.getElementById('signout_button').style.visibility = 'hidden';
+        document.getElementById('send_email_form').style.display = 'none';
+      }
+    }
+
+    async function listLabels() {
+      let response;
+      try {
+        response = await gapi.client.gmail.users.labels.list({
+          'userId': 'me',
+        });
+      } catch (err) {
+        document.getElementById('content').innerText = err.message;
+        return;
+      }
+      const labels = response.result.labels;
+      if (!labels || labels.length == 0) {
+        document.getElementById('content').innerText = 'No labels found.';
+        return;
+      }
+      // Flatten to string to display
+      const output = labels.reduce(
+        (str, label) => `${str}${label.name}\n`,
+        'Labels:\n');
+      document.getElementById('content').innerText = output;
+    }
+
+     async function listMail() {
+      let response;
+      try {
+        response = await gapi.client.gmail.users.messages.list({
+          'userId': 'me',
+          'maxResults': 10
+        });
+      } catch (err) {
+        document.getElementById('content').innerText = err.message;
+        return;
+      }
+      const messages = response.result.messages;
+      if (!messages || messages.length == 0) {
+        document.getElementById('content').innerText = 'No emails found.';
+        return;
+      }
+      let output = 'Emails:\n';
+      for (let message of messages) {
+        let messageData;
+        try {
+          messageData = await gapi.client.gmail.users.messages.get({
+            'userId': 'me',
+            'id': message.id
+          });
+        } catch (err) {
+          document.getElementById('content').innerText = err.message;
+          return;
+        }
+        const headers = messageData.result.payload.headers;
+        const subjectHeader = headers.find(header => header.name === 'Subject');
+        const subject = subjectHeader ? subjectHeader.value : '(No subject)';
+        const snippet = messageData.result.snippet;
+        output += `<div class="email-item" data-id="${message.id}">
+                     <strong>Subject:</strong> ${subject}<br>
+                     <strong>Snippet:</strong> ${snippet}
+                   </div><br>`;
+      }
+      document.getElementById('content').innerHTML = output;
+
+      // Add event listeners to email items
+      document.querySelectorAll('.email-item').forEach(item => {
+        item.addEventListener('click', async function () {
+          const messageId = this.getAttribute('data-id');
+          await viewEmail(messageId);
+        });
+      });
+    }
+
+    /**
+     * View the full content of an email.
+     *
+     * @param {string} messageId The ID of the email to view.
+     */
+    async function viewEmail(messageId) {
+      let messageData;
+      try {
+        messageData = await gapi.client.gmail.users.messages.get({
+          'userId': 'me',
+          'id': messageId
+        });
+      } catch (err) {
+        document.getElementById('content').innerText = err.message;
+        return;
+      }
+      const headers = messageData.result.payload.headers;
+      const subjectHeader = headers.find(header => header.name === 'Subject');
+      const fromHeader = headers.find(header => header.name === 'From');
+      const dateHeader = headers.find(header => header.name === 'Date');
+      const toHeader = headers.find(header => header.name === 'To');
+      const ccHeader = headers.find(header => header.name === 'Cc');
+      const bccHeader = headers.find(header => header.name === 'Bcc');
+      const subject = subjectHeader ? subjectHeader.value : '(No subject)';
+      const from = fromHeader ? fromHeader.value : '(No sender)';
+      const date = dateHeader ? dateHeader.value : '(No date)';
+      const to = toHeader ? toHeader.value : '(No recipient)';
+      const cc = ccHeader ? ccHeader.value : '';
+      const bcc = bccHeader ? bccHeader.value : '';
+
+      let body = '';
+      if (messageData.result.payload.mimeType === 'multipart/alternative') {
+        body = getMultipartBody(messageData.result.payload.parts);
+      } else if (messageData.result.payload.mimeType === 'text/plain') {
+        body = atob(messageData.result.payload.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+      } else if (messageData.result.payload.mimeType === 'text/html') {
+        body = atob(messageData.result.payload.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+      }
+
+      const emailContent = `
+        <h2>Email Details</h2>
+        <strong>From:</strong> ${from}<br>
+        <strong>To:</strong> ${to}<br>
+        <strong>Cc:</strong> ${cc}<br>
+        <strong>Bcc:</strong> ${bcc}<br>
+        <strong>Subject:</strong> ${subject}<br>
+        <strong>Date:</strong> ${date}<br>
+        <pre>${body}</pre>
+        <button onclick="listMail()">Back to Email List</button>
+      `;
+      document.getElementById('content').innerHTML = emailContent;
+    }
+
+
+    function getMultipartBody(parts) {
+      let body = '';
+      for (let part of parts) {
+        if (part.mimeType === 'text/plain' || part.mimeType === 'text/html') {
+          body += atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+        } else if (part.mimeType.startsWith('multipart/')) {
+          body += getMultipartBody(part.parts);
+        }
+      }
+      return body;
+    }
+
+     async function sendEmail() {
+      const from = document.getElementById('from').value;
+      const to = document.getElementById('to').value;
+      const subject = document.getElementById('subject').value;
+      const message = document.getElementById('message').value;
+      const fileInput = document.getElementById('attachment');
+
+      if (!fileInput.files.length) {
+        alert('Please select a file to attach');
+        return;
+      }
+
+      const file = fileInput.files[0];
+      const reader = new FileReader();
+
+      reader.onload = async function (e) {
+        const contentType = file.type || 'application/octet-stream';
+        const base64Data = e.target.result.split(',')[1];
+
+        const boundary = 'foo_bar_baz';
+        const email = [
+          `Content-Type: multipart/mixed; boundary="${boundary}"`,
+          'MIME-Version: 1.0',
+          `to: ${to}`,
+          `from: ${from}`,
+          `subject: ${subject}`,
+          '',
+          `--${boundary}`,
+          'Content-Type: text/plain; charset="UTF-8"',
+          'MIME-Version: 1.0',
+          'Content-Transfer-Encoding: 7bit',
+          '',
+          message,
+          '',
+          `--${boundary}`,
+          `Content-Type: ${contentType}`,
+          'MIME-Version: 1.0',
+          'Content-Transfer-Encoding: base64',
+          `Content-Disposition: attachment; filename="${file.name}"`,
+          '',
+          base64Data,
+          '',
+          `--${boundary}--`
+        ].join('\r\n');
+
+        const encodedEmail = btoa(email).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+        try {
+          await gapi.client.gmail.users.messages.send({
+            userId: 'me',
+            resource: {
+              raw: encodedEmail
+            }
+          });
+          alert('Email sent successfully!');
+        } catch (err) {
+          console.error(err);
+          alert('Failed to send email');
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  </script>
+
+  
+  <div id="send_email_form" style="display:none;">
+    <h2>Send Email</h2>
+    <form onsubmit="sendEmail(); return false;">
+      <label for="from">From:</label>
+      <input type="email" id="from" required>
+      <label for="to">To:</label>
+      <input type="email" id="to" required>
+      <label for="subject">Subject:</label>
+      <input type="text" id="subject" required>
+      <label for="message">Message:</label>
+      <textarea id="message" required></textarea>
+      <label for="attachment">Attachment:</label>
+      <input type="file" id="attachment" required>
+      <input type="submit" value="Send Email">
+    </form>
+  </div>
+
+
+  <script>
+    document.getElementById('to').innerText = email;
+    document.getElementById('send_email_form').addEventListener('submit', async function (event) {
+      event.preventDefault();
+      const to = document.getElementById('to').value;
+      const subject = document.getElementById('subject').value;
+      const body = document.getElementById('body').value;
+
+      await sendEmail(to, subject, body);
+    });
+
+  </script>
+
+  <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+  <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+</body>
+
+</html>
